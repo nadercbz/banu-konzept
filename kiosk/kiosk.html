@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>Bānu Bestellterminal</title>
+<!-- Bānu Bestellterminal (Prototyp, Step 22). Hochkant 1080 x 1920, Touch.
+     kiosk.html          Kundenterminal      (auch kiosk.html#kiosk)
+     kiosk.html#kds      Küchenmonitor, Bon je Station Smoothie, Toast, Kaffee (1920 x 1080)
+     kiosk.html#ready    Abholmonitor mit Pickup Würfel (1920 x 1080)
+     Oben rechts schaltet eine kleine Leiste zwischen den Ansichten um (?bar=0 blendet sie aus).
+     Bestellungen laufen über localStorage und BroadcastChannel zwischen Tabs im selben Browser (Demo). Bezahlung ist nur simuliert.
+     Schriften und Bilder relativ aus assets/, Logo inline. Optional daneben: Banu_Kiosk_Attract.mp4.
+     Bānu, Konzept von Social Bites für den Inhaber, Entwurf. Marke noch nicht angemeldet. Bilder sind KI Visualisierungen. -->
+<style>
+@font-face{font-family:'Archivo';src:url('assets/fonts/Archivo-VF.ttf');font-weight:100 900;font-stretch:62% 125%}
+@font-face{font-family:'DM Sans';src:url('assets/fonts/DMSans-VF.ttf');font-weight:100 1000}
+@font-face{font-family:'JB Mono';src:url('assets/fonts/JetBrainsMono-VF.ttf');font-weight:100 800}
+:root{--basalt:#1A1C1A;--moos:#26342A;--beton:#8C877E;--creme:#EAE4D7;--eis:#BCD4D4;--l:rgba(234,228,215,.16);--l2:rgba(234,228,215,.32);--dim:rgba(234,228,215,.64)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#111311;overflow:hidden;font-family:'DM Sans',sans-serif;color:var(--creme);user-select:none;-webkit-user-select:none}
+button{font-family:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+button:disabled{cursor:default}
+.disp,.nm,h1,h2,h3{font-family:'Archivo',sans-serif;font-stretch:125%;font-weight:800;letter-spacing:-.02em}
+.mono{font-family:'JB Mono',monospace;text-transform:uppercase;letter-spacing:.09em;font-weight:500}
+#bar{position:fixed;right:10px;top:6px;z-index:1000;display:flex;gap:6px}
+#bar a{font:600 13px 'DM Sans',sans-serif;color:var(--creme);border:1px solid rgba(234,228,215,.4);background:#1A1C1A;border-radius:9px;padding:6px 14px;text-decoration:none}#bar a.on{background:var(--creme);color:#1A1C1A}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;background:var(--basalt)}
+#stage::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 70% at 20% 100%,rgba(38,52,42,.95),rgba(26,28,26,0) 70%),radial-gradient(90% 50% at 100% 0%,rgba(38,52,42,.7),rgba(26,28,26,0) 70%)}
+#app{position:absolute;inset:0}
+.logo{display:block;fill:var(--creme)}
+/* Kopfleiste */
+.top{position:absolute;left:0;right:0;top:0;height:132px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;z-index:5;border-bottom:1px solid var(--l)}
+.top .logo{width:190px;height:46px}
+.wait{display:flex;flex-direction:column;align-items:flex-start;margin-left:28px;margin-right:auto}
+.wait b{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:30px;line-height:1}
+.wait span{font-family:'JB Mono';font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--eis);margin-top:6px}
+.pills{display:flex;gap:12px}
+.pill{height:62px;padding:0 22px;border-radius:12px;border:1px solid var(--l2);font-size:22px;font-weight:600;display:flex;align-items:center;gap:10px;white-space:nowrap}
+.pill.on{background:var(--creme);color:var(--basalt)}
+.pill b{background:var(--eis);color:var(--basalt);border-radius:8px;min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;padding:0 6px}
+/* Start */
+.attract{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:120px 70px 80px;text-align:center;background:var(--basalt)}
+.attract video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.attract>*{position:relative;z-index:1}
+.attract .logo{width:640px;height:156px}
+.attract .lbl{font-family:'JB Mono';font-size:24px;letter-spacing:.14em;color:var(--eis);margin-top:28px}
+.attract h1{margin:0;font-size:150px;line-height:.9}
+.attract .sub{font-size:32px;color:rgba(234,228,215,.86);margin-top:24px;line-height:1.3}
+.hero{height:640px;width:100%;position:relative}
+.hero img{position:absolute;left:50%;top:50%;height:640px;width:auto;transform:translate(-50%,-50%);opacity:0;animation:fade 16s infinite}
+.hero img:nth-child(2){animation-delay:4s}.hero img:nth-child(3){animation-delay:8s}.hero img:nth-child(4){animation-delay:12s}
+@keyframes fade{0%{opacity:0;transform:translate(-50%,-47%) scale(.97)}6%,22%{opacity:1;transform:translate(-50%,-50%) scale(1)}28%,100%{opacity:0;transform:translate(-50%,-52%) scale(1.02)}}
+.cta{height:140px;padding:0 80px;border-radius:14px;background:var(--creme);color:var(--basalt);font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:46px;display:inline-flex;align-items:center;gap:24px;animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.03)}}
+.attract .w2{font-family:'JB Mono';font-size:20px;letter-spacing:.1em;color:var(--eis);margin-top:22px;text-transform:uppercase}
+.attract.vid>.logo,.attract.vid>.lbl,.attract.vid>div:not(.foot):not(.ctaw),.attract.vid>h1{visibility:hidden}
+.foot{position:absolute;left:40px;right:40px;bottom:18px;font-family:'JB Mono';font-size:15px;line-height:1.4;color:rgba(234,228,215,.55);text-align:center;z-index:2}
+/* Wahl */
+.mode{position:absolute;left:0;right:0;top:132px;bottom:0;padding:70px 70px 100px;display:flex;flex-direction:column;gap:40px}
+.mode h2,.h2{margin:0;font-size:100px;line-height:.92}
+.mode p{margin:-16px 0 0;font-size:28px;color:var(--dim)}
+.bigbtn{flex:1;border-radius:14px;border:1px solid var(--l2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:96px;line-height:.92}
+.bigbtn small{font-size:28px;font-weight:500;font-family:'DM Sans';font-stretch:100%;letter-spacing:0;color:var(--dim)}
+.bigbtn.b{background:var(--moos);border-color:var(--moos)}
+.bigbtn .mono{font-size:20px;color:var(--eis);letter-spacing:.12em}
+/* Menue */
+.menu{position:absolute;left:0;right:0;top:132px;bottom:170px;display:flex}
+.rail{width:236px;padding:22px 0 20px 26px;display:flex;flex-direction:column;gap:8px;overflow:auto;border-right:1px solid var(--l)}
+.rail button{min-height:92px;border-radius:12px 0 0 12px;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:27px;line-height:1;text-align:left;padding:0 18px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;color:var(--dim)}
+.rail button small{font-family:'JB Mono';font-weight:500;font-size:13px;letter-spacing:.1em;color:rgba(234,228,215,.45)}
+.rail button.on{background:var(--moos);color:var(--creme)}
+.rail button.on small{color:var(--eis)}
+.grid{flex:1;overflow:auto;padding:22px 32px 40px 26px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-content:start}
+.grid .head{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding-bottom:10px;border-bottom:1px solid var(--l2);margin-bottom:4px}
+.grid .head h2{margin:0;font-size:78px;line-height:.92}
+.grid .head span{font-family:'JB Mono';font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--eis);text-align:right;max-width:300px;line-height:1.35}
+.card{border:1px solid var(--l);border-radius:14px;padding:14px 16px 18px;display:flex;flex-direction:column;position:relative;background:rgba(26,28,26,.55)}
+.card.sold{opacity:.4;pointer-events:none}
+.card .im{height:270px;border-radius:10px;background:var(--moos);position:relative;overflow:hidden;margin-bottom:14px}
+.card .im img{width:100%;height:100%;object-fit:cover;display:block}
+.card .im.cut img{object-fit:contain;padding:12px}
+.card .im .kb{position:absolute;inset:0;display:flex}
+.card .im .kb img{width:50%;object-fit:contain;padding:10px}
+.stk{position:absolute;left:10px;top:10px;min-width:56px;height:38px;padding:0 10px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'JB Mono';font-weight:700;font-size:18px;z-index:2}
+.card h3{margin:0;font-size:31px;line-height:1.02;text-transform:lowercase}
+.card p{margin:8px 0 0;font-size:20px;line-height:1.3;color:rgba(234,228,215,.82);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:52px}
+.card .al{font-family:'JB Mono';font-size:15px;color:rgba(234,228,215,.5);letter-spacing:.1em;margin-top:8px;min-height:20px;text-transform:uppercase}
+.card .bt{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.price{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:44px;line-height:1}
+.price small{font-size:16px;font-family:'JB Mono';font-stretch:100%;letter-spacing:.08em;text-transform:uppercase;font-weight:500;color:var(--eis);display:block;margin-top:6px}
+.add{width:72px;height:72px;border-radius:12px;background:var(--creme);color:var(--basalt);font-size:46px;font-weight:400;display:flex;align-items:center;justify-content:center;line-height:1}
+.tag{display:inline-flex;align-items:center;justify-content:center;height:1em;padding:0 .4em;border-radius:6px;background:var(--eis);color:var(--basalt);font-family:'JB Mono';font-size:.48em;font-weight:700;letter-spacing:.06em;vertical-align:.32em;margin-left:.45em;font-stretch:100%}
+.warn{position:absolute;right:12px;top:12px;z-index:3;background:var(--creme);color:var(--basalt);font-size:17px;font-weight:700;border-radius:9px;padding:7px 12px;max-width:72%}
+.soldtag{position:absolute;left:50%;top:120px;transform:translateX(-50%) rotate(-4deg);z-index:4;background:var(--creme);color:var(--basalt);font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:32px;padding:10px 24px;border-radius:10px}
+.season{font-family:'JB Mono';font-size:14px;letter-spacing:.1em;color:var(--eis);text-transform:uppercase;margin-top:6px}
+/* Warenkorb Leiste */
+.bar{position:absolute;left:0;right:0;bottom:0;height:170px;border-top:1px solid var(--l2);background:var(--basalt);display:flex;align-items:center;justify-content:space-between;padding:0 40px;z-index:6}
+.bar .t{font-family:'JB Mono';font-size:18px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.bar .s{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:54px;margin-top:6px}
+.bar .wt{font-family:'JB Mono';font-size:15px;color:var(--eis);letter-spacing:.08em;margin-top:6px;text-transform:uppercase}
+.go{height:110px;padding:0 54px;border-radius:14px;background:var(--creme);color:var(--basalt);font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:36px}
+.go:disabled{opacity:.3}
+.go.g{background:none;border:1px solid var(--l2);color:var(--creme)}
+/* Blatt */
+.scrim{position:absolute;inset:0;background:rgba(10,11,10,.72);z-index:20}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:1640px;background:var(--basalt);border-top:1px solid var(--l2);border-radius:18px 18px 0 0;z-index:21;display:flex;flex-direction:column}
+.sheet .x{position:absolute;right:26px;top:22px;width:74px;height:74px;border-radius:12px;border:1px solid var(--l2);font-size:44px;z-index:3;background:var(--basalt)}
+.sheet .body{overflow:auto;padding:34px 46px 20px}
+.sheet .pic{height:400px;border-radius:12px;background:var(--moos);overflow:hidden;margin-bottom:24px;position:relative}
+.sheet .pic img{width:100%;height:100%;object-fit:cover}
+.sheet .pic.cut img{object-fit:contain;padding:16px}
+.sheet .pic .kb{position:absolute;inset:0;display:flex}.sheet .pic .kb img{width:50%;object-fit:contain;padding:18px}
+.sheet h2{margin:0;font-size:62px;line-height:.98;text-transform:lowercase}
+.sheet .d{font-size:26px;line-height:1.35;margin:12px 0 0;color:rgba(234,228,215,.88)}
+.sheet .z{font-family:'JB Mono';font-size:17px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:14px 0 0;line-height:1.5}
+.sheet .a{font-size:21px;line-height:1.35;margin:12px 0 0;color:var(--eis)}
+.grp{margin-top:30px}
+.grp h4{margin:0 0 14px;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:34px;display:flex;justify-content:space-between;align-items:baseline;gap:20px;text-transform:lowercase}
+.grp h4 span{font-family:'JB Mono';font-size:15px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--eis);text-align:right}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.opt{min-height:98px;border-radius:12px;border:1px solid var(--l2);padding:16px 20px;text-align:left;font-size:25px;font-weight:600;position:relative;display:flex;flex-direction:column;justify-content:center}
+.opt small{font-size:18px;font-weight:400;color:var(--dim);margin-top:5px;line-height:1.3}
+.opt .pl{position:absolute;right:18px;top:16px;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:24px}
+.opt.on{background:var(--creme);color:var(--basalt);border-color:var(--creme)}
+.opt.on small{color:rgba(26,28,26,.75)}
+.opt:disabled{opacity:.32}
+.opt .w{font-size:16px;font-weight:700;color:var(--basalt);background:var(--eis);border-radius:7px;padding:3px 8px;margin-top:8px;align-self:flex-start}
+.opt.on .w{background:var(--basalt);color:var(--eis)}
+.note{margin-top:14px;font-size:20px;line-height:1.35;border:1px solid rgba(188,212,212,.6);border-radius:12px;padding:14px 18px;color:var(--eis)}
+.sum2{margin-top:26px;font-size:22px;line-height:1.4;color:var(--dim)}
+.sum2 b{color:var(--creme)}
+.foot2{padding:22px 46px 34px;border-top:1px solid var(--l);display:flex;gap:18px;align-items:center}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:84px;height:84px;border-radius:12px;border:1px solid var(--l2);font-size:44px}
+.step button:disabled{opacity:.3}
+.step span{min-width:60px;text-align:center;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:40px}
+.add2{flex:1;height:110px;border-radius:14px;background:var(--creme);color:var(--basalt);font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:30px;display:flex;justify-content:space-between;align-items:center;padding:0 34px}
+.add2:disabled{opacity:.35}
+/* Seiten */
+.page{position:absolute;left:0;right:0;top:132px;bottom:170px;overflow:auto;padding:50px 50px 40px}
+.lead{font-size:26px;color:var(--dim);margin:14px 0 30px;line-height:1.35}
+.urow,.crow{display:flex;align-items:center;gap:22px;border-top:1px solid var(--l);padding:20px 0}
+.urow .im,.crow .im{width:150px;height:150px;border-radius:10px;background:var(--moos);overflow:hidden;flex:none;position:relative}
+.urow .im img,.crow .im img{width:100%;height:100%;object-fit:contain;padding:8px}
+.urow .im.cov img,.crow .im.cov img{object-fit:cover;padding:0}
+.urow .tx,.crow .tx{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.urow .tx b,.crow .tx b{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:32px;line-height:1.02;text-transform:lowercase}
+.urow .tx span,.crow .tx span{font-size:20px;color:var(--dim);line-height:1.3}
+.crow .tx .ac{font-family:'JB Mono';font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:rgba(234,228,215,.5)}
+.crow .rm{align-self:flex-start;font-size:19px;color:var(--eis);text-decoration:underline;margin-top:4px}
+.crow .pr{width:150px;text-align:right;font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:32px}
+.crow .step button{width:66px;height:66px;font-size:34px}.crow .step span{min-width:40px;font-size:30px}
+.uh{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:40px;margin:26px 0 6px;text-transform:lowercase}
+.sum{margin-top:20px;border-top:1px solid var(--l2);padding-top:20px}
+.sum div{display:flex;justify-content:space-between;font-size:24px;padding:6px 0;color:var(--dim)}
+.sum .tot{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:46px;color:var(--creme);padding-top:14px}
+.hint{font-size:22px;border:1px solid rgba(188,212,212,.6);border-radius:12px;padding:16px 20px;color:var(--eis);line-height:1.35}
+.skip{height:90px;padding:0 40px;border-radius:12px;border:1px solid var(--l2);font-size:24px;font-weight:600}
+.payopts{display:flex;flex-direction:column;gap:30px;height:1040px}
+.demo{position:absolute;left:50px;bottom:200px;font-size:20px;color:var(--dim);display:flex;gap:12px;align-items:center}
+.demo input{width:30px;height:30px}
+.center{position:absolute;left:0;right:0;top:132px;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;text-align:center;padding:0 80px}
+.center h2{margin:0;font-size:80px;line-height:.95}
+.center p{font-size:28px;color:var(--dim);margin:0;line-height:1.4}
+.ring{width:200px;height:200px;border-radius:50%;border:3px solid var(--l2);border-top-color:var(--creme);animation:spin 1.1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.row2{display:flex;gap:20px;width:100%}.row2 button{flex:1;height:100px;border-radius:12px;background:var(--creme);color:var(--basalt);font-size:28px;font-weight:700}.row2 button.g{background:none;border:1px solid var(--l2);color:var(--creme)}
+.done{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:110px 70px 90px;text-align:center;gap:18px}
+.done .logo{width:300px;height:73px;margin-bottom:30px}
+.done .k{font-family:'JB Mono';font-size:22px;letter-spacing:.14em;color:var(--eis)}
+.done .n{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:300px;line-height:.9;letter-spacing:-.03em}
+.done h2{margin:0;font-size:56px;line-height:1}
+.done p{font-size:26px;color:var(--dim);margin:0;max-width:880px;line-height:1.4}
+.eta{display:flex;gap:16px;align-items:center;border:1px solid var(--l2);border-radius:14px;padding:18px 28px;margin-top:10px}
+.eta b{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:54px}.eta span{font-size:22px;color:var(--dim);text-align:left;line-height:1.3}
+.bon{width:760px;border:1px solid var(--l2);border-radius:12px;padding:24px 30px;text-align:left;font-family:'JB Mono';font-size:18px;line-height:1.5;margin-top:10px;color:rgba(234,228,215,.85)}
+.bon div{display:flex;justify-content:space-between;gap:20px}.bon hr{border:0;border-top:1px dashed var(--l2);margin:10px 0}
+.done .cta{animation:none;height:120px;font-size:36px;margin-top:auto}
+/* Dialog */
+.dlg{position:absolute;left:70px;right:70px;top:50%;transform:translateY(-50%);background:var(--basalt);border:1px solid var(--l2);border-radius:16px;padding:46px;z-index:31}
+.dlg h3{margin:0;font-size:58px;line-height:1;text-transform:lowercase}
+.dlg p{font-size:24px;color:var(--dim);line-height:1.4}
+.dlg h5{margin:26px 0 12px;font-family:'JB Mono';font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--eis);font-weight:500}
+.acb{display:flex;flex-wrap:wrap;gap:12px}
+.acb button{height:72px;padding:0 24px;border-radius:12px;border:1px solid var(--l2);font-size:23px;font-weight:600}
+.acb button.on{background:var(--creme);color:var(--basalt)}
+.dlg .row2{margin-top:34px}
+.dlg .cdn{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:150px;text-align:center}
+.scrim.d{z-index:30}
+.toast{position:absolute;left:50%;bottom:200px;transform:translateX(-50%);background:var(--creme);color:var(--basalt);font-size:24px;font-weight:700;padding:20px 32px;border-radius:12px;z-index:40;white-space:nowrap}
+/* Barrierefrei: Inhalt unten, groessere Schrift */
+.accband{display:none}
+#stage.access #app{top:700px}
+#stage.access .accband{display:flex;flex-direction:column;justify-content:center;position:absolute;left:0;right:0;top:0;height:700px;padding:0 70px;background:var(--moos);gap:20px}
+.accband div{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:70px;line-height:1}.accband small{font-size:30px;line-height:1.35;color:rgba(234,228,215,.85)}
+#stage.access .card h3{font-size:36px}#stage.access .card p{font-size:23px}
+#stage.access .menu{bottom:170px}#stage.access .card .im{height:180px}
+/* Kueche */
+.k-wrap{position:absolute;inset:0;display:flex;flex-direction:column;padding:24px 28px 20px;gap:18px}
+.k-top{display:flex;align-items:center;gap:26px;border-bottom:1px solid var(--l);padding-bottom:16px}
+.k-top .logo{width:150px;height:37px}
+.k-top h1{margin:0;font-size:46px;line-height:1;margin-right:auto}
+.k-top .q{font-family:'JB Mono';font-size:16px;letter-spacing:.08em;color:var(--eis);text-transform:uppercase}
+.k-btn{height:54px;padding:0 20px;border-radius:10px;border:1px solid var(--l2);font-size:18px;font-weight:600}
+.k-btn.on{background:var(--creme);color:var(--basalt)}
+.k-cols{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr 340px;gap:18px;min-height:0}
+.k-col{border:1px solid var(--l);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0}
+.k-col h2{margin:0;font-size:30px;display:flex;justify-content:space-between;align-items:center;text-transform:lowercase}
+.k-col h2 span:last-child{font-family:'JB Mono';font-size:16px;font-weight:700;background:var(--moos);border-radius:8px;padding:4px 10px;letter-spacing:.04em}
+.k-col .sub{font-family:'JB Mono';font-size:13px;letter-spacing:.1em;color:var(--eis);text-transform:uppercase;margin-top:-6px}
+.k-col .list{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0}
+.tk{background:var(--creme);color:var(--basalt);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;border-left:10px solid var(--moos)}
+.tk.late{border-left-color:#B5532E}
+.tk.done{opacity:.5}
+.tk .h{display:flex;justify-content:space-between;align-items:baseline}
+.tk .h b{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:40px;line-height:1}
+.tk .h span{font-family:'JB Mono';font-size:17px;font-weight:700}
+.tk .m{font-family:'JB Mono';font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:rgba(26,28,26,.7)}
+.tk .l{border-top:1px solid rgba(26,28,26,.18);padding-top:8px;display:flex;flex-direction:column;gap:3px}
+.tk .l b{font-size:21px;font-weight:700;display:flex;align-items:center;gap:10px}
+.tk .l b i{display:inline-block;width:16px;height:16px;border-radius:4px;flex:none}
+.tk .l em{font-style:normal;font-size:17px;font-weight:600}
+.tk .l small{font-family:'JB Mono';font-size:13px;letter-spacing:.06em;color:rgba(26,28,26,.65);text-transform:uppercase}
+.tk button{height:58px;border-radius:10px;background:var(--basalt);color:var(--creme);font-size:20px;font-weight:700;margin-top:4px}
+.tk .ok{font-family:'JB Mono';font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--moos)}
+.k-side{display:flex;flex-direction:column;gap:18px;min-height:0}
+.k-side .k-col{flex:1}
+.k-draw{position:absolute;right:28px;top:96px;bottom:20px;width:560px;background:var(--basalt);border:1px solid var(--l2);border-radius:14px;padding:24px;overflow:auto;z-index:10}
+.k-draw h3{margin:0 0 16px;font-size:32px;text-transform:lowercase}
+.k-draw .it{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--l);font-size:19px}
+.k-draw .it button{height:44px;padding:0 16px;border-radius:9px;border:1px solid var(--l2);font-size:16px;font-weight:600}
+.k-draw .it button.on{background:var(--creme);color:var(--basalt)}
+/* Abholung */
+.r-wrap{position:absolute;inset:0;display:grid;grid-template-columns:1.25fr 520px 1fr}
+.r-wrap section{padding:56px 56px 40px;display:flex;flex-direction:column;gap:24px;min-width:0}
+.r-a{background:var(--moos)}
+.r-wrap h1{margin:0;font-size:86px;line-height:.9}
+.r-wrap .k{font-family:'JB Mono';font-size:20px;letter-spacing:.14em;color:var(--eis)}
+.nums{display:flex;flex-wrap:wrap;gap:20px;align-content:flex-start}
+.r-a .nums span{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:150px;line-height:1;min-width:300px;letter-spacing:-.03em}
+.r-c .nums{flex-direction:column;gap:6px}
+.r-c .nums div{width:100%;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--l);padding:12px 0}
+.r-c .nums b{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:64px;line-height:1;color:rgba(234,228,215,.8)}
+.r-c .nums span{font-family:'JB Mono';font-size:20px;color:var(--eis);letter-spacing:.06em}
+.empty{font-size:28px;color:var(--dim);line-height:1.4;max-width:600px}
+.r-b{align-items:center;justify-content:center;text-align:center;border-left:1px solid var(--l);border-right:1px solid var(--l)}
+.cube{width:300px;height:300px;position:relative;transform-style:preserve-3d;transform:rotateX(-24deg) rotateY(-38deg);margin:110px 0 80px}
+.cube div{position:absolute;inset:0;border:1px solid rgba(234,228,215,.5);display:flex;align-items:center;justify-content:center}
+.cube .f1{transform:translateZ(150px);background:linear-gradient(160deg,#D9E6E5,#9FBFC0)}
+.cube .f2{transform:rotateY(90deg) translateZ(150px);background:linear-gradient(160deg,#C4D7D7,#7FA3A4)}
+.cube .f3{transform:rotateX(90deg) translateZ(150px);background:#E6EFEE}
+.cube .f1 svg{width:150px;height:150px}
+.r-b{position:relative}
+.glow{position:absolute;left:50%;top:230px;margin-left:-260px;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(188,212,212,.35),rgba(188,212,212,0) 65%);animation:breathe 4s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.55;transform:scale(.92)}}
+.r-b .t{font-family:'Archivo';font-stretch:125%;font-weight:800;font-size:40px;line-height:1.05}
+.r-b .s{font-size:22px;color:var(--dim);line-height:1.4;max-width:400px}
+.r-b .logo{width:200px;height:49px;margin-top:auto}
+.r-foot{position:absolute;left:56px;bottom:20px;width:660px;line-height:1.4;font-family:'JB Mono';font-size:13px;color:rgba(234,228,215,.5)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="lg" viewBox="0 0 3138.0 763.0"><g fill="#EAE4D7" transform="translate(20.0,731.0) scale(1,-1)"><path transform="translate(0.0,0)" d="M463.7646484375 -12Q404.6689453125 -12 350.44287109375 8.6826171875Q296.216796875 29.365234375 255.947265625 82.1826171875H247.1298828125L231.04296875 0H62.0087890625V724.8173828125H270.3037109375V468.173828125H278.9384765625Q301.755859375 494.173828125 333.5732421875 510.0390625Q365.390625 525.904296875 400.12109375 532.86083984375Q434.8515625 539.8173828125 465.408203125 539.8173828125Q544.2255859375 539.8173828125 607.22119140625 510.22607421875Q670.216796875 480.634765625 707.3037109375 419.634765625Q744.390625 358.634765625 744.390625 263.8173828125Q744.390625 169.365234375 707.21240234375 108.27392578125Q670.0341796875 47.1826171875 606.67333984375 17.59130859375Q543.3125 -12 463.7646484375 -12ZM400.9736328125 136.6953125Q446.251953125 136.6953125 475.48681640625 152.15185546875Q504.7216796875 167.6083984375 518.90869140625 194.66064453125Q533.095703125 221.712890625 533.095703125 255.1826171875V272.634765625Q533.095703125 306.1044921875 518.90869140625 332.65673828125Q504.7216796875 359.208984375 475.66943359375 375.16552734375Q446.6171875 391.1220703125 401.3388671875 391.1220703125Q367.2431640625 391.1220703125 342.37353515625 381.439453125Q317.50390625 371.7568359375 301.2255859375 355.11767578125Q284.947265625 338.478515625 277.12548828125 316.017578125Q269.3037109375 293.556640625 269.3037109375 267V260.634765625Q269.3037109375 226.1650390625 283.17333984375 197.79541015625Q297.04296875 169.42578125 326.369140625 153.060546875Q355.6953125 136.6953125 400.9736328125 136.6953125Z"/><path transform="translate(773.0,0)" d="M270 -12Q219.73046875 -12 176.36962890625 -4.90869140625Q133.0087890625 2.1826171875 100.8740234375 19.6826171875Q68.7392578125 37.1826171875 50.921875 67.59130859375Q33.1044921875 98 33.1044921875 145.4521484375Q33.1044921875 208.634765625 66.87841796875 245.04345703125Q100.65234375 281.4521484375 163.017578125 298.67822265625Q225.3828125 315.904296875 310.8828125 320.7216796875Q396.3828125 325.5390625 500.4697265625 325.5390625V338.5478515625Q500.4697265625 366.826171875 486.01318359375 383.96533203125Q471.556640625 401.1044921875 444.4130859375 408.787109375Q417.26953125 416.4697265625 378.4345703125 416.4697265625Q353.0517578125 416.4697265625 325.5908203125 412.51318359375Q298.1298828125 408.556640625 279.1298828125 398.60009765625Q260.1298828125 388.6435546875 260.1298828125 369.826171875V364.365234375H48.5654296875Q47.5654296875 368.365234375 47.47412109375 371.13916015625Q47.3828125 373.9130859375 47.3828125 378.095703125Q47.3828125 425.095703125 85.87841796875 461.73046875Q124.3740234375 498.365234375 200.365234375 519.09130859375Q276.3564453125 539.8173828125 387.7998046875 539.8173828125Q490.6083984375 539.8173828125 562.2822265625 522.40869140625Q633.9560546875 505 671.3603515625 466.8173828125Q708.7646484375 428.634765625 708.7646484375 364.26953125V161.791015625Q708.7646484375 145.2431640625 716.67333984375 134.01708984375Q724.58203125 122.791015625 741.1298828125 122.791015625H795.3994140625V7.4521484375Q778.8603515625 1 745.8212890625 -5.5Q712.7822265625 -12 675.8779296875 -12Q623.7041015625 -12 591.43896484375 -2.22607421875Q559.173828125 7.5478515625 542.54345703125 24.095703125Q525.9130859375 40.6435546875 518.6435546875 60.3740234375H510.6435546875Q481.826171875 38.4609375 445.68701171875 21.9130859375Q409.5478515625 5.365234375 366.0 -3.3173828125Q322.4521484375 -12 270 -12ZM330.9736328125 110.5302734375Q349.078125 110.5302734375 376.99560546875 114.66943359375Q404.9130859375 118.80859375 433.41748046875 128.63037109375Q461.921875 138.4521484375 481.19580078125 154.45654296875Q500.4697265625 170.4609375 500.4697265625 195.0087890625V226.9130859375Q408.904296875 226.9130859375 350.9345703125 218.595703125Q292.96484375 210.2783203125 265.9560546875 194.73046875Q238.947265625 179.1826171875 238.947265625 155.9912109375Q238.947265625 136.443359375 252.3603515625 126.66943359375Q265.7734375 116.8955078125 287.14306640625 113.712890625Q308.5126953125 110.5302734375 330.9736328125 110.5302734375Z"/><path transform="translate(1558.0,0)" d="M62.0087890625 0V527.8173828125H231.04296875L245.1298828125 441.0869140625H254.1298828125Q281.4951171875 476.8173828125 318.08642578125 498.40869140625Q354.677734375 520 396.177734375 529.90869140625Q437.677734375 539.8173828125 479.947265625 539.8173828125Q558.0341796875 539.8173828125 609.986328125 514.77392578125Q661.9384765625 489.73046875 688.16455078125 439.4609375Q714.390625 389.19140625 714.390625 314.556640625V0H506.095703125V288.1044921875Q506.095703125 311.478515625 499.45654296875 330.8916015625Q492.8173828125 350.3046875 479.81298828125 363.4873046875Q466.80859375 376.669921875 447.212890625 383.89599609375Q427.6171875 391.1220703125 400.88671875 391.1220703125Q363.42578125 391.1220703125 333.9169921875 375.98291015625Q304.408203125 360.84375 287.35595703125 334.15673828125Q270.3037109375 307.4697265625 270.3037109375 272.6435546875V0Z"/><path transform="translate(2323.0,0)" d="M294.904296875 -12Q178.365234375 -12 119.4130859375 44.904296875Q60.4609375 101.80859375 60.4609375 213.2607421875V527.8173828125H268.755859375V239.712890625Q268.755859375 216.3388671875 275.39501953125 196.92578125Q282.0341796875 177.5126953125 295.03857421875 164.330078125Q308.04296875 151.1474609375 328.04736328125 143.92138671875Q348.0517578125 136.6953125 373.96484375 136.6953125Q411.42578125 136.6953125 440.9345703125 151.83447265625Q470.443359375 166.9736328125 487.49560546875 194.0693359375Q504.5478515625 221.1650390625 504.5478515625 255.173828125V527.8173828125H712.8427734375V0H543.80859375L529.7216796875 86.73046875H520.7216796875Q493.5390625 51 456.8564453125 29.40869140625Q420.173828125 7.8173828125 378.76513671875 -2.09130859375Q337.3564453125 -12 294.904296875 -12Z"/><rect x="836.6" y="626.0" width="701.3" height="85.0" rx="0.0"/></g></symbol><symbol id="mark" viewBox="0 0 1000 1000"><g fill="#1A1C1A" transform="translate(217.4,738.4) scale(0.6822,-0.6822)"><path d="M270 -12Q219.73046875 -12 176.36962890625 -4.90869140625Q133.0087890625 2.1826171875 100.8740234375 19.6826171875Q68.7392578125 37.1826171875 50.921875 67.59130859375Q33.1044921875 98 33.1044921875 145.4521484375Q33.1044921875 208.634765625 66.87841796875 245.04345703125Q100.65234375 281.4521484375 163.017578125 298.67822265625Q225.3828125 315.904296875 310.8828125 320.7216796875Q396.3828125 325.5390625 500.4697265625 325.5390625V338.5478515625Q500.4697265625 366.826171875 486.01318359375 383.96533203125Q471.556640625 401.1044921875 444.4130859375 408.787109375Q417.26953125 416.4697265625 378.4345703125 416.4697265625Q353.0517578125 416.4697265625 325.5908203125 412.51318359375Q298.1298828125 408.556640625 279.1298828125 398.60009765625Q260.1298828125 388.6435546875 260.1298828125 369.826171875V364.365234375H48.5654296875Q47.5654296875 368.365234375 47.47412109375 371.13916015625Q47.3828125 373.9130859375 47.3828125 378.095703125Q47.3828125 425.095703125 85.87841796875 461.73046875Q124.3740234375 498.365234375 200.365234375 519.09130859375Q276.3564453125 539.8173828125 387.7998046875 539.8173828125Q490.6083984375 539.8173828125 562.2822265625 522.40869140625Q633.9560546875 505 671.3603515625 466.8173828125Q708.7646484375 428.634765625 708.7646484375 364.26953125V161.791015625Q708.7646484375 145.2431640625 716.67333984375 134.01708984375Q724.58203125 122.791015625 741.1298828125 122.791015625H795.3994140625V7.4521484375Q778.8603515625 1 745.8212890625 -5.5Q712.7822265625 -12 675.8779296875 -12Q623.7041015625 -12 591.43896484375 -2.22607421875Q559.173828125 7.5478515625 542.54345703125 24.095703125Q525.9130859375 40.6435546875 518.6435546875 60.3740234375H510.6435546875Q481.826171875 38.4609375 445.68701171875 21.9130859375Q409.5478515625 5.365234375 366.0 -3.3173828125Q322.4521484375 -12 270 -12ZM330.9736328125 110.5302734375Q349.078125 110.5302734375 376.99560546875 114.66943359375Q404.9130859375 118.80859375 433.41748046875 128.63037109375Q461.921875 138.4521484375 481.19580078125 154.45654296875Q500.4697265625 170.4609375 500.4697265625 195.0087890625V226.9130859375Q408.904296875 226.9130859375 350.9345703125 218.595703125Q292.96484375 210.2783203125 265.9560546875 194.73046875Q238.947265625 179.1826171875 238.947265625 155.9912109375Q238.947265625 136.443359375 252.3603515625 126.66943359375Q265.7734375 116.8955078125 287.14306640625 113.712890625Q308.5126953125 110.5302734375 330.9736328125 110.5302734375Z"/><rect x="63.6" y="626.0" width="701.3" height="85.0"/></g></symbol></svg>
+<div id="bar"></div>
+<div id="stage"><div id="app"></div></div>
+<script>window.MENU = {"stand":"2026-10-21","items":[{"id":"s01","nr":"01","name":"Glow Up","kat":"Smoothies","price":660,"desc":"Sanddorn und Mango, hell und sauer, mit Ingwer.","zut":["Sanddorn","Mango","Kokoswasser","Kollagen","Ingwer"],"all":[],"vg":false,"v":false,"farbe":"#F28C28","groesse":"16 oz, ca. 450 ml","sig":false,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s02","nr":"02","name":"Sunrise Spice","kat":"Smoothies","price":580,"desc":"Karotte, Orange, Kurkuma und eine Prise Pfeffer.","zut":["Karotte","Orange","Ingwer","Kurkuma","Honig","schwarzer Pfeffer"],"all":[],"vg":false,"v":true,"farbe":"#E9B43C","groesse":"16 oz, ca. 450 ml","sig":false,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s03","nr":"03","name":"Beet Beat","kat":"Smoothies","price":610,"desc":"Rote Bete, Himbeere, Apfel. Für nach dem Lauf.","zut":["Rote Bete Saft","Apfel","Himbeere","Ingwer","Zitrone"],"all":[],"vg":true,"v":true,"farbe":"#9E2B4A","groesse":"16 oz, ca. 450 ml","sig":true,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s04","nr":"04","name":"Date Night","kat":"Smoothies","price":620,"desc":"Dattel, Tahini, Banane. Cremig wie ein Milchshake.","zut":["Datteln","Tahini","Banane","Hafermilch","Zimt","Prise Salz"],"all":["a","k"],"vg":true,"v":true,"farbe":"#A0724A","groesse":"16 oz, ca. 450 ml","sig":true,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s05","nr":"05","name":"Jungle Glow","kat":"Smoothies","price":600,"desc":"Moringa, Ananas, Limette. Grün, frisch, nicht bitter.","zut":["Moringa","Ananas","Mango","Kokoswasser","Limette","Ingwer"],"all":[],"vg":true,"v":true,"farbe":"#6E9A3A","groesse":"16 oz, ca. 450 ml","sig":true,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s06","nr":"06","name":"Blue Lagoon","kat":"Smoothies","price":630,"desc":"Blaue Spirulina, Banane, Kokos. Die Farbe ist echt.","zut":["Blaue Spirulina","Banane","Ananas","Kokosmilch","Limette"],"all":[],"vg":true,"v":true,"farbe":"#2F6FB0","groesse":"16 oz, ca. 450 ml","sig":true,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"s07","nr":"07","name":"Libido","kat":"Smoothies","price":650,"desc":"Safran, Maca, Mango, Kardamom. Der goldene.","zut":["Safran","Maca","Mango","Mandelmilch","Honig","Kardamom"],"all":["h"],"vg":false,"v":true,"farbe":"#D9822B","groesse":"16 oz, ca. 450 ml","sig":false,"tops":[],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"b01","nr":"B1","name":"Green Tribe Bowl","kat":"Bowls","price":990,"desc":"Die Bānu Bowl. Grün gemixt, Ton in Ton getoppt.","zut":["Spinat","Banane","Mango","Chlorella","Kokosmilch"],"all":["a","h"],"vg":false,"v":true,"farbe":"#4E7D3A","groesse":"16 oz Bowl","sig":true,"tops":["Granola","Kiwi","Hanfsamen","Kokoschips","Honig"],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":true,"o_gf":false,"o_milk":false},{"id":"b02","nr":"B2","name":"Berry Club Bowl","kat":"Bowls","price":990,"desc":"Beeren, Banane, Erdnussbutter und Kakaonibs.","zut":["Heidelbeere","Himbeere","Banane","Hafermilch"],"all":["a","e","h"],"vg":true,"v":true,"farbe":"#7A2E5A","groesse":"16 oz Bowl","sig":true,"tops":["Granola","Erdbeere","Kakaonibs","Erdnussbutter"],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":true,"o_gf":false,"o_milk":false},{"id":"b03","nr":"B3","name":"Blue Hour Bowl","kat":"Bowls","price":1050,"desc":"Blau wie die Stunde nach dem Abendlauf.","zut":["Blaue Spirulina","Banane","Ananas","Kokosjoghurt"],"all":["a","h"],"vg":true,"v":true,"farbe":"#2F6FB0","groesse":"16 oz Bowl","sig":false,"tops":["Heidelbeere","Kokoschips","Chiasamen","Granola"],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":true,"o_gf":false,"o_milk":false},{"id":"b04","nr":"B4","name":"Matcha Chia Pot","kat":"Bowls","price":790,"desc":"Matcha Chia Pudding mit Erdbeere und Pistazie. Zum Mitnehmen.","zut":["Chiasamen","Matcha","Hafermilch","Ahornsirup"],"all":["a","h"],"vg":true,"v":true,"farbe":"#8DB04A","groesse":"12 oz Becher","sig":false,"tops":["Erdbeere","Hanfsamen","Pistaziencreme","gefriergetrocknete Himbeere"],"saison":null,"cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":true,"o_gf":false,"o_milk":false},{"id":"b05","nr":"B5","name":"Feige Porridge","kat":"Bowls","price":850,"desc":"Warm. Hafer und Chia mit frischer Feige. Nur im Herbst.","zut":["Haferflocken","Chiasamen","Hafermilch","Zimt"],"all":["a","g","h"],"vg":false,"v":true,"farbe":"#8A4B5C","groesse":"Schale","sig":false,"tops":["Feige","Granola","Joghurt","Dattelsirup","Walnuss","Minze"],"saison":"Herbst","cut":true,"station":"smoothie","pfanne":false,"o_prot":true,"o_tops":true,"o_gf":false,"o_milk":false},{"id":"t01","nr":"T1","name":"Tunacado","kat":"Toasts","price":890,"desc":"Thunfisch, Avocado, Limette, Chili, getoastet mit Käse.","zut":["Thunfisch","Avocado","rote Zwiebel","Limette","Koriander","Chiliflocken","Käse"],"all":["a","d","g","c"],"vg":false,"v":false,"farbe":null,"groesse":null,"sig":true,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t02","nr":"T2","name":"Schinken Käse","kat":"Toasts","price":820,"desc":"Der Klassiker, ernst genommen.","zut":["Kochschinken","gereifter Bergkäse","Senf","karamellisierte Zwiebeln"],"all":["a","g","j"],"vg":false,"v":false,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t03","nr":"T3","name":"Ei und Bacon","kat":"Toasts","price":820,"desc":"Rührei, Bacon, Cheddar. Frühstück zum Mitnehmen.","zut":["Rührei","Bacon","gereifter Cheddar","karamellisierte Zwiebeln"],"all":["a","c","g"],"vg":false,"v":false,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t04","nr":"T4","name":"Vegan Hummus","kat":"Toasts","price":780,"desc":"Hummus, Zucchini vom Grill, Kürbiskerne.","zut":["Hummus","gegrillte Zucchini","Paprika","Rucola","geröstete Kürbiskerne"],"all":["a","k"],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t05","nr":"T5","name":"Avocado Classic","kat":"Toasts","price":750,"desc":"Avocado, Tomate, Chili. Einfach gut.","zut":["Avocado","Cherrytomate","Chiliflocken","Limette","Meersalz"],"all":["a"],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t06","nr":"T6","name":"Pesto Tomate","kat":"Toasts","price":790,"desc":"Pesto, Tomate, Mozzarella, warm und weich.","zut":["Basilikum Pesto","Tomate","Mozzarella","Rucola"],"all":["a","g","h"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"t07","nr":"T7","name":"Jam Session","kat":"Toasts","price":760,"desc":"Erdnussbutter, Marmelade, Banane. Süß.","zut":["Marmelade","Erdnussbutter","Banane","Kokoschips","Granola"],"all":["a","e","h"],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"p01","nr":"P1","name":"Rührei Natur","kat":"Aus der Pfanne","price":650,"desc":"Drei Eier, Butter, Sauerteig.","zut":["drei Eier","Butter","Salz","Pfeffer","Sauerteigbrot"],"all":["a","c","g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":true,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"p02","nr":"P2","name":"Feta Rührei","kat":"Aus der Pfanne","price":950,"desc":"Mit Feta, Tomate und Oliven.","zut":["Rührei","Feta","Cherrytomate","schwarze Oliven","Frühlingszwiebel","Sauerteigbrot"],"all":["a","c","g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":true,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"p03","nr":"P3","name":"Bauern Rührei","kat":"Aus der Pfanne","price":980,"desc":"Mit Bratkartoffeln und Sauerrahm.","zut":["Rührei","Bratkartoffeln","Röstzwiebeln","Schnittlauch","Sauerrahm","Sauerteigbrot"],"all":["a","c","g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":true,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"p04","nr":"P4","name":"Menemen","kat":"Aus der Pfanne","price":920,"desc":"Ei, Tomate, Spitzpaprika. Wie zu Hause.","zut":["Rührei","Tomate","grüne Paprika","Zwiebel","Chiliflocken","Petersilie","Sauerteigbrot"],"all":["a","c"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"toast","pfanne":true,"o_prot":false,"o_tops":false,"o_gf":true,"o_milk":false},{"id":"k01","nr":"K1","name":"Espresso","kat":"Kaffee","price":320,"desc":"Rotierende Single Origin Röstung.","zut":["Espresso"],"all":[],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"k02","nr":"K2","name":"Cortado","kat":"Kaffee","price":380,"desc":"Espresso und warme Milch zu gleichen Teilen.","zut":["Espresso","Milch"],"all":["g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":true},{"id":"k03","nr":"K3","name":"Flat White","kat":"Kaffee","price":430,"desc":"Doppelter Espresso, feiner Schaum.","zut":["doppelter Espresso","Milch"],"all":["g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":true},{"id":"k04","nr":"K4","name":"Café Latte","kat":"Kaffee","price":420,"desc":"Viel Milch, dünne Haube.","zut":["Espresso","Milch"],"all":["g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":true},{"id":"k05","nr":"K5","name":"Filterkaffee","kat":"Kaffee","price":360,"desc":"Handaufguss, wechselnde Herkunft.","zut":["Filterkaffee"],"all":[],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"k06","nr":"K6","name":"Iced Matcha","kat":"Kaffee","price":520,"desc":"Ceremonial Matcha auf Eis.","zut":["Matcha","Hafermilch","Eis"],"all":["a"],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"k07","nr":"K7","name":"Kakao High Flavanol","kat":"Kaffee","price":440,"desc":"Schonend verarbeiteter Kakao.","zut":["Kakao","Milch"],"all":["g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"kaffee","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":true},{"id":"x01","nr":"X1","name":"Ingwer Shot","kat":"Shots","price":290,"desc":"60 ml, scharf. Aus dem Kühlschrank, sofort.","zut":["Ingwer","Zitrone","Apfel"],"all":[],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"tresen","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"x02","nr":"X2","name":"Kurkuma Shot","kat":"Shots","price":290,"desc":"60 ml, golden. Sofort zum Mitnehmen.","zut":["Kurkuma","Orange","schwarzer Pfeffer"],"all":[],"vg":true,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":false,"station":"tresen","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"g01","nr":"G1","name":"Bananenbrot","kat":"Gebäck","price":450,"desc":"Saftig, mit Walnüssen.","zut":["Banane","Walnuss","Dinkelmehl","Ei","Butter"],"all":["a","c","g","h"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"tresen","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"g02","nr":"G2","name":"Protein Cheesecake","kat":"Gebäck","price":550,"desc":"Mit Quark und Protein, auf Haferkeks Boden.","zut":["Quark","Ei","Molkenprotein","Haferkeks Boden"],"all":["a","c","g"],"vg":false,"v":true,"farbe":null,"groesse":null,"sig":false,"tops":[],"saison":null,"cut":true,"station":"tresen","pfanne":false,"o_prot":false,"o_tops":false,"o_gf":false,"o_milk":false},{"id":"kombi-fuel","nr":"","name":"Fuel Kombi","kat":"Kombis","price":1350,"desc":"Toast nach Wahl plus Smoothie nach Wahl.","zut":[],"all":[],"vg":false,"v":false,"farbe":null,"cut":false,"kombi":{"a":"Toasts","b":"Smoothies"},"station":"mix"},{"id":"kombi-morgen","nr":"","name":"Morgen Kombi","kat":"Kombis","price":720,"desc":"Kaffee plus Bananenbrot.","zut":[],"all":[],"vg":false,"v":false,"farbe":null,"cut":false,"kombi":{"a":"Kaffee","b":"g01"},"station":"mix"}],"cats":["Smoothies","Bowls","Toasts","Aus der Pfanne","Kaffee","Shots","Gebäck","Kombis"],"codes":{"a":"Gluten","b":"Krebstiere","c":"Eier","d":"Fisch","e":"Erdnüsse","f":"Soja","g":"Milch","h":"Schalenfrüchte","i":"Sellerie","j":"Senf","k":"Sesam","l":"Sulfite","m":"Lupinen","n":"Weichtiere"},"milch":{"kuh":{"name":"Kuhmilch","plus":0,"all":["g"]},"hafer":{"name":"Hafermilch","plus":50,"all":["a"]},"mandel":{"name":"Mandelmilch","plus":50,"all":["h"]},"soja":{"name":"Sojamilch","plus":50,"all":["f"]}},"preise":{"prot":150,"gf":100,"top":100,"milch":50},"extras_namen":{"prot":"Protein Boost (Erbsenprotein)","gf":"Glutenfreies Brot statt Sauerteig","top":"Extra Topping auf der Bowl","milch":"Milchalternative (Hafer, Mandel, Soja)"},"rules":{"order_start":101,"max_qty":9,"max_lines":20,"staff_call_count":12,"max_tops":3,"minuten":{"smoothie":[2.0,1.0],"toast":[4.0,1.5],"pfanne":[5.0,1.5],"kaffee":[1.5,0.5],"tresen":[0,0]},"late_min":10,"idle_s":60,"idle_cd":15},"foot":"Bānu, Konzept von Social Bites für den Inhaber, Entwurf. Marke noch nicht angemeldet. Bilder sind KI Visualisierungen.","vb":{"lg":"0 0 3138.0 763.0","mark":"0 0 1000 1000"}};</script>
+<script>
+/* Bānu Bestellterminal. Bestelllogik, Oberfläche, Küchenmonitor (Bon je Station), Abholmonitor. Regeln stehen in Bestelllogik.md.
+   Daten kommen aus window.MENU (build_kiosk.py aus Speisekarte.json). Demo: Bestellungen laufen über localStorage und BroadcastChannel zwischen Tabs.
+   Im Betrieb ersetzt eine API genau die Funktionen im Block API. Bezahlung ist nur simuliert. */
+(function(){
+"use strict";
+var M = window.MENU, R = M.rules, PR = M.preise, MI = M.milch, I = {}; M.items.forEach(function(i){ I[i.id] = i; });
+var Q = new URLSearchParams(location.search), VIEW = Q.get("view") || (location.hash || "").replace("#", "") || "kiosk";
+if(["kiosk", "kds", "ready"].indexOf(VIEW) < 0) VIEW = "kiosk";
+var EXPORT = Q.get("export") === "1", BAR = (!EXPORT && Q.get("bar") !== "0") ? 44 : 0;
+var W = VIEW === "kiosk" ? 1080 : 1920, H = VIEW === "kiosk" ? 1920 : 1080;
+var stage = document.getElementById("stage"), app = document.getElementById("app");
+stage.style.width = W + "px"; stage.style.height = H + "px";
+function fit(){ if(EXPORT){ stage.style.transform = "none"; return; } var s = Math.min(innerWidth / W, (innerHeight - BAR) / H); stage.style.transform = "scale(" + s + ")"; stage.style.left = ((innerWidth - W * s) / 2) + "px"; stage.style.top = (BAR + (innerHeight - BAR - H * s) / 2) + "px"; }
+addEventListener("resize", fit); fit();
+if(BAR){ document.getElementById("bar").innerHTML = [["kiosk", "Terminal"], ["kds", "Küche"], ["ready", "Abholung"]].map(function(v){ return '<a href="#' + v[0] + '" class="' + (v[0] === VIEW ? "on" : "") + '">' + v[1] + "</a>"; }).join(""); addEventListener("hashchange", function(){ location.reload(); }); }
+if(VIEW === "kiosk") stage.insertAdjacentHTML("afterbegin", '<div class="accband"><div>barrierefreier modus</div><small>Alles liegt jetzt in der unteren Bildschirmhälfte, gut erreichbar im Sitzen. Tippe oben rechts noch einmal auf Barrierefrei, um zurückzugehen.</small></div>');
+
+function eur(c){ return (c / 100).toFixed(2).replace(".", ",") + " €"; }
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+function src(id){ return "assets/img/" + id + ".webp"; }
+function pic(it, cls){
+  if(it.kombi){ var a = it.id === "kombi-fuel" ? ["t05", "s05"] : ["k02", "g01"]; return '<div class="' + cls + ' cut"><div class="kb">' + a.map(function(x){ return '<img src="' + src(x) + '" alt="">'; }).join("") + "</div></div>"; }
+  return '<div class="' + cls + (it.cut ? " cut" : "") + '">' + (it.farbe ? stk(it) : "") + '<img src="' + src(it.id) + '" alt=""></div>';
+}
+function lum(hex){ var n = parseInt(hex.slice(1), 16); return .2126 * (n >> 16) / 255 + .7152 * (n >> 8 & 255) / 255 + .0722 * (n & 255) / 255; }
+function stk(it){ return '<div class="stk" style="background:' + it.farbe + ";color:" + (lum(it.farbe) < .45 ? "var(--creme)" : "var(--basalt)") + '">' + esc(it.nr) + "</div>"; }
+function logo(cls, id){ id = id || "lg"; return '<svg class="logo ' + (cls || "") + '" viewBox="' + M.vb[id] + '"><use href="#' + id + '"/></svg>'; }
+function cname(c){ return M.codes[c]; }
+function union(){ var o = []; [].slice.call(arguments).forEach(function(a){ (a || []).forEach(function(c){ if(o.indexOf(c) < 0) o.push(c); }); }); return o.sort(); }
+function lc(s){ return String(s).toLowerCase(); }
+function byKat(k){ return M.items.filter(function(i){ return i.kat === k; }); }
+
+/* ---------------- Zustand ---------------- */
+var S = {screen: "attract", mode: null, cat: "Smoothies", cart: [], sheet: null, access: false, filter: [], diet: null, dlg: null, last: null, toast: null, payfail: false, upDone: false, countdown: R.idle_cd};
+var uidN = 1, lastTouch = Date.now(), doneTimer = null;
+
+/* ---------------- Linien: Preis, Vollständigkeit, Allergene, Stationen ---------------- */
+function newLine(it){
+  if(it.kombi) return {id: it.id, qty: 1, a: null, b: it.kombi.b.length === 3 ? it.kombi.b : null, gf: false, prot: false, milk: "kuh"};
+  return {id: it.id, qty: 1, prot: false, gf: false, milk: "kuh", tops: []};
+}
+function extrasOf(l, it){ var p = 0; if(l.prot) p += PR.prot; if(l.gf) p += PR.gf; if(l.milk && l.milk !== "kuh") p += MI[l.milk].plus; if(l.tops) p += l.tops.length * PR.top; return p; }
+function kombiBase(l, it){ var sum = (l.a ? I[l.a].price : 0) + (l.b ? I[l.b].price : 0); return (l.a && l.b) ? Math.min(it.price, sum) : it.price; }
+function lineUnit(l){ var it = I[l.id]; return (it.kombi ? kombiBase(l, it) : it.price) + extrasOf(l, it); }
+function lineTotal(l){ return lineUnit(l) * l.qty; }
+function cartTotal(){ return S.cart.reduce(function(a, l){ return a + lineTotal(l); }, 0); }
+function cartCount(){ return S.cart.reduce(function(a, l){ return a + l.qty; }, 0); }
+function missing(l){ var it = I[l.id]; if(!it.kombi) return ""; if(!l.a) return it.id === "kombi-fuel" ? "Noch einen Toast wählen" : "Noch einen Kaffee wählen"; if(!l.b) return "Noch einen Smoothie wählen"; return ""; }
+function milkAll(base, milk){ if(!milk || milk === "kuh") return base; return union(base.filter(function(c){ return c !== "g"; }), MI[milk].all); }
+function partsOf(l){
+  var it = I[l.id], out = [];
+  function p(id, from, o){ var x = I[id], opts = [];
+    if(o.milk && o.milk !== "kuh" && x.o_milk) opts.push(MI[o.milk].name);
+    if(o.prot && x.o_prot) opts.push("Protein Boost");
+    if(o.gf && x.o_gf) opts.push("Glutenfreies Brot (Kreuzkontakt Hinweis)");
+    if(o.tops && o.tops.length) opts.push("Extra: " + o.tops.join(", "));
+    if(from) opts.push("aus " + from);
+    out.push({item: id, name: x.name, qty: l.qty, st: x.station === "tresen" ? "kaffee" : x.station, tresen: x.station === "tresen", pfanne: !!x.pfanne, opts: opts,
+              all: x.o_milk ? milkAll(x.all, o.milk) : x.all, farbe: x.farbe || null}); }
+  if(it.kombi){ if(l.a) p(l.a, it.name, {gf: l.gf, milk: l.milk}); if(l.b) p(l.b, it.name, {prot: l.prot}); }
+  else p(l.id, null, l);
+  return out;
+}
+function lineAll(l){ return union.apply(null, partsOf(l).map(function(p){ return p.all; })); }
+function lineOpts(l){
+  var it = I[l.id], o = [];
+  if(it.kombi){ if(l.a) o.push(I[l.a].name + (l.gf ? " mit glutenfreiem Brot" : "") + (l.milk !== "kuh" && I[l.a].o_milk ? " mit " + MI[l.milk].name : "")); if(l.b) o.push(I[l.b].name + (l.prot ? " mit Protein Boost" : "")); return o; }
+  if(l.milk !== "kuh" && it.o_milk) o.push(MI[l.milk].name);
+  if(l.prot) o.push("Protein Boost");
+  if(l.gf) o.push("Glutenfreies Brot");
+  if(l.tops.length) o.push("Extra Topping: " + l.tops.join(", "));
+  return o;
+}
+function sameCfg(a, b){ var x = JSON.parse(JSON.stringify(a)), y = JSON.parse(JSON.stringify(b)); delete x.uid; delete y.uid; delete x.qty; delete y.qty; return JSON.stringify(x) === JSON.stringify(y); }
+function addLine(l){
+  for(var i = 0; i < S.cart.length; i++) if(sameCfg(S.cart[i], l)){ S.cart[i].qty = Math.min(R.max_qty, S.cart[i].qty + l.qty); return S.cart[i]; }
+  if(S.cart.length >= R.max_lines){ toast("Bitte kurz zum Tresen kommen, das ist eine große Bestellung."); return null; }
+  l.uid = uidN++; S.cart.push(l); return l;
+}
+function containsOf(all, f){ return f.filter(function(c){ return all.indexOf(c) > -1; }); }
+function soldList(){ try { return JSON.parse(localStorage.getItem("banu-sold") || "[]"); } catch(e){ return []; } }
+function isSold(it){ return soldList().indexOf(it.id) > -1; }
+function dietOk(it){ if(it.kombi || !S.diet) return true; return S.diet === "vg" ? it.vg : it.v; }
+
+/* ---------------- Wartezeit (alles frisch gemacht, Annahme je Station, siehe Bestelllogik.md) ---------------- */
+function stationMins(parts){
+  var m = {}, n = {};
+  parts.forEach(function(p){ if(p.tresen){ m.kaffee = m.kaffee || 0; return; } var k = p.st + (p.st === "toast" && p.pfanne ? "P" : ""); n[k] = (n[k] || 0) + p.qty; m[p.st] = m[p.st] || 0; });
+  Object.keys(n).forEach(function(k){ var st = k.replace("P", ""), def = R.minuten[k.slice(-1) === "P" ? "pfanne" : st]; m[st] = Math.max(m[st], 0) + def[0] + (n[k] - 1) * def[1]; });
+  if(m.kaffee === 0) m.kaffee = 0.5;
+  return m;
+}
+function queue(){ var q = {smoothie: 0, toast: 0, kaffee: 0}; db().forEach(function(o){ if(o.status !== "open") return; Object.keys(o.st).forEach(function(s){ if(o.st[s] === "open") q[s] += o.mins[s] || 0; }); }); return q; }
+function eta(parts){ var m = stationMins(parts), q = queue(), e = 0; Object.keys(m).forEach(function(s){ e = Math.max(e, q[s] + m[s]); }); return Math.max(1, Math.ceil(e)); }
+function etaNow(){ return eta([{st: "smoothie", qty: 1}]); }
+function cartParts(){ return [].concat.apply([], S.cart.map(partsOf)); }
+
+/* Upsell: höchstens 3 Vorschläge, immer überspringbar */
+function upsell(){
+  var out = [], c = S.cart, kat = function(k){ return c.some(function(l){ return I[l.id].kat === k; }); };
+  var t = c.filter(function(l){ return I[l.id].kat === "Toasts"; })[0], s = c.filter(function(l){ return I[l.id].kat === "Smoothies"; })[0], fk = I["kombi-fuel"];
+  if(t && s){ var save = I[t.id].price + I[s.id].price - fk.price; if(save > 0) out.push({kind: "kombi", why: "Mach eine " + fk.name + " daraus", t: t.uid, s: s.uid, save: save}); }
+  if(!kat("Shots")) out.push({kind: "item", why: "Für unterwegs, sofort", ids: byKat("Shots").map(function(i){ return i.id; })});
+  if(kat("Kaffee") && !kat("Gebäck") && !c.some(function(l){ return l.id === "kombi-morgen"; })) out.push({kind: "item", why: "Zum Kaffee", ids: byKat("Gebäck").map(function(i){ return i.id; })});
+  return out.slice(0, 3);
+}
+
+/* ---------------- API (Demo: localStorage; Betrieb: Server) ---------------- */
+var bc = ("BroadcastChannel" in window) ? new BroadcastChannel("banu-kiosk") : null;
+function db(){ try { return JSON.parse(localStorage.getItem("banu-orders") || "[]"); } catch(e){ return []; } }
+function save(o){ try { localStorage.setItem("banu-orders", JSON.stringify(o)); } catch(e){} if(bc) bc.postMessage("orders"); }
+function setSold(a){ try { localStorage.setItem("banu-sold", JSON.stringify(a)); } catch(e){} if(bc) bc.postMessage("sold"); }
+function nextNumber(){
+  var d = new Date().toISOString().slice(0, 10), st; try { st = JSON.parse(localStorage.getItem("banu-seq") || "{}"); } catch(e){ st = {}; }
+  if(st.d !== d) st = {d: d, n: R.order_start - 1};
+  st.n++; try { localStorage.setItem("banu-seq", JSON.stringify(st)); } catch(e){}
+  return String(st.n);
+}
+function buildOrder(method, lines, mode){
+  var now = new Date().toISOString(), paid = method === "card", parts = [].concat.apply([], lines.map(partsOf)), mins = stationMins(parts), st = {};
+  Object.keys(mins).forEach(function(s){ st[s] = "open"; });
+  var e = eta(parts), total = lines.reduce(function(a, l){ return a + lineTotal(l); }, 0);
+  return {id: "o" + Date.now() + Math.floor(Math.random() * 100), number: nextNumber(), created: now, mode: mode, total: total, eta: e, mins: mins, st: st,
+    lines: lines.map(function(l){ return {id: l.id, name: I[l.id].name, qty: l.qty, opts: lineOpts(l), all: lineAll(l), total: lineTotal(l)}; }), parts: parts,
+    pay: {method: method, status: paid ? "paid" : "open"}, status: paid ? "open" : "awaiting_payment", started: paid ? now : null, log: [{s: paid ? "open" : "awaiting_payment", at: now}]};
+}
+function placeOrder(method){ var o = buildOrder(method, S.cart, S.mode), all = db(); all.push(o); save(all); return o; }
+function update(id, fn){ var all = db(); all.forEach(function(o){ if(o.id === id) fn(o); }); save(all); }
+function paid(id){ update(id, function(o){ o.pay.status = "paid"; o.status = "open"; o.started = new Date().toISOString(); o.log.push({s: "open", at: o.started}); }); }
+function stationDone(id, s){ update(id, function(o){ o.st[s] = "done"; o.log.push({s: "done_" + s, at: new Date().toISOString()}); if(Object.keys(o.st).every(function(k){ return o.st[k] === "done"; })){ o.status = "ready"; o.log.push({s: "ready", at: new Date().toISOString()}); } }); }
+function pickedUp(id){ update(id, function(o){ o.status = "done"; o.log.push({s: "done", at: new Date().toISOString()}); }); }
+function demoOrder(){
+  var keep = S.cart, km = S.mode;
+  S.cart = [{id: "s03", qty: 1, prot: true, gf: false, milk: "kuh", tops: [], uid: 1}, {id: "t01", qty: 1, prot: false, gf: true, milk: "kuh", tops: [], uid: 2}, {id: "k03", qty: 2, prot: false, gf: false, milk: "hafer", tops: [], uid: 3}, {id: "x01", qty: 1, prot: false, gf: false, milk: "kuh", tops: [], uid: 4}];
+  var o = buildOrder("card", S.cart, "go"); S.cart = keep; S.mode = km; var all = db(); all.push(o); save(all);
+}
+
+/* ---------------- Hilfen UI ---------------- */
+function toast(m){ S.toast = m; render(); setTimeout(function(){ if(S.toast === m){ S.toast = null; render(); } }, 2400); }
+function tags(it){ return it.vg ? '<span class="tag">VG</span>' : ""; }
+function allText(al){ var cn = al.map(cname); return cn.length ? "Enthält: " + cn.join(", ") + ". Spuren sind möglich." : "Keine der 14 Hauptallergene enthalten. Spuren sind möglich."; }
+
+/* ---------------- Rendering Terminal ---------------- */
+function render(){
+  if(VIEW === "kds") return renderKds();
+  if(VIEW === "ready") return renderReady();
+  var g = app.querySelector(".grid"), st = g ? g.scrollTop : 0, h = "";
+  var sc = app.querySelector(".sheet .body"), st2 = (sc && !S.fresh) ? sc.scrollTop : 0; S.fresh = false;
+  switch(S.screen){
+    case "attract": h = vAttract(); break;
+    case "mode": h = vTop(false) + vMode(); break;
+    case "menu": h = vTop(true) + vMenu() + vBar(); break;
+    case "upsell": h = vTop(true) + vUpsell() + vBarSkip(); break;
+    case "cart": h = vTop(true) + vCart() + vBarPay(); break;
+    case "pay": h = vTop(true) + vPay(); break;
+    case "paying": h = vTop(false) + vPaying(); break;
+    case "payfail": h = vTop(false) + vFail(); break;
+    case "done": h = vDone(); break;
+  }
+  if(S.sheet) h += vSheet();
+  if(S.dlg) h += vDlg();
+  if(S.toast) h += '<div class="toast">' + esc(S.toast) + "</div>";
+  app.innerHTML = h; stage.classList.toggle("access", S.access);
+  var g2 = app.querySelector(".grid"); if(g2) g2.scrollTop = st; var s2 = app.querySelector(".sheet .body"); if(s2) s2.scrollTop = st2;
+}
+function vTop(full){
+  var n = S.filter.length + (S.diet ? 1 : 0), fl = n ? "<b>" + n + "</b>" : "";
+  return '<div class="top">' + logo() + '<div class="wait"><b>ca. ' + etaNow() + ' min</b><span>Wartezeit · alles frisch gemacht</span></div><div class="pills"><button class="pill' + (n ? " on" : "") + '" data-a="filter">Allergene' + fl + '</button><button class="pill' + (S.access ? " on" : "") + '" data-a="access">Barrierefrei</button>' +
+    (full || S.screen === "mode" ? '<button class="pill" data-a="cancel">Abbrechen</button>' : "") + "</div></div>";
+}
+function vAttract(){
+  var heroes = ["s01", "s03", "s05", "s06"];
+  return '<div class="attract" data-a="start"><video src="Banu_Kiosk_Attract.mp4" autoplay muted loop playsinline onloadeddata="this.parentNode.classList.add(\x27vid\x27)"></video>' + logo() +
+    '<div class="lbl">[ SMOOTHIES · BOWLS · SAUERTEIG ]</div><h1>dein<br>stamm.</h1>' +
+    '<div class="hero">' + heroes.map(function(k){ return '<img src="' + src(k) + '" alt="">'; }).join("") + "</div>" +
+    '<div class="ctaw"><button class="cta" data-a="start">Tippen zum Bestellen</button><div class="w2">Gerade ca. ' + etaNow() + " Min. Wartezeit · alles frisch gemacht</div></div>" +
+    '<div class="foot">' + esc(M.foot) + " Bezahlung im Prototyp nur simuliert.</div></div>";
+}
+function vMode(){
+  return '<div class="mode"><h2>wo trinkst du?</h2><p>Das steht auf deinem Bon und sagt uns, ob Becher oder Glas.</p>' +
+    '<button class="bigbtn b" data-a="mode" data-v="here"><span class="mono">[ HIER ]</span>im laden<small>Am Tisch oder an der Bank</small></button>' +
+    '<button class="bigbtn" data-a="mode" data-v="go"><span class="mono">[ TO GO ]</span>mitnahme<small>Becher und Tüte für unterwegs</small></button></div>' +
+    '<div class="foot">' + esc(M.foot) + "</div>";
+}
+function card(it){
+  var warn = containsOf(it.all, S.filter), sold = isSold(it);
+  var w = warn.length ? '<div class="warn">enthält ' + warn.map(cname).join(", ") + "</div>" : "";
+  var price = it.kombi ? '<div class="price">' + eur(it.price) + "<small>Kombi Preis</small></div>" : '<div class="price">' + eur(it.price) + (it.groesse && it.kat === "Smoothies" ? "<small>16 oz</small>" : "") + "</div>";
+  var note = it.kombi ? "Allergene je nach Wahl" : (it.all.length ? "[ " + it.all.join(" ") + " ]" : "");
+  return '<div class="card' + (sold ? " sold" : "") + '" data-a="card" data-v="' + it.id + '">' + (sold ? '<div class="soldtag">ausverkauft</div>' : "") + w + pic(it, "im") +
+    "<h3>" + esc(it.name) + tags(it) + "</h3>" + (it.saison ? '<div class="season">Nur im ' + esc(it.saison) + "</div>" : "") + "<p>" + esc(it.desc) + '</p><div class="al">' + note + "</div>" +
+    '<div class="bt">' + price + '<div class="add" aria-label="Hinzufügen">+</div></div></div>';
+}
+var NOTES = {"Smoothies": "16 oz, ca. 450 ml, frisch gemixt", "Bowls": "Kalt gemixt, Toppings oben drauf", "Toasts": "Sauerteig, frisch getoastet. Glutenfrei auf Anfrage", "Aus der Pfanne": "Mit Sauerteigbrot", "Kaffee": "Milchalternative möglich", "Shots": "60 ml, sofort aus dem Kühlschrank", "Gebäck": "Sofort vom Tresen", "Kombis": "Nie teurer als einzeln"};
+function vMenu(){
+  var all = M.items.filter(function(i){ return i.kat === S.cat; }), list = all.filter(dietOk), hid = all.length - list.length, nt = NOTES[S.cat] || "";
+  if(hid) nt += (nt ? ". " : "") + hid + " ausgeblendet (Filter)";
+  var cnt = function(c){ return M.items.filter(function(i){ return i.kat === c; }).length; };
+  return '<div class="menu"><div class="rail">' + M.cats.map(function(c){ return '<button class="' + (c === S.cat ? "on" : "") + '" data-a="cat" data-v="' + c + '">' + lc(c) + "<small>" + ("0" + cnt(c)).slice(-2) + "</small></button>"; }).join("") + "</div>" +
+    '<div class="grid"><div class="head"><h2>' + lc(S.cat) + "</h2><span>" + esc(nt) + "</span></div>" + list.map(card).join("") + "</div></div>";
+}
+function vBar(){
+  var n = cartCount();
+  return '<div class="bar"><div><div class="t">' + (n ? n + " Artikel" : "Warenkorb leer") + '</div><div class="s">' + eur(cartTotal()) + "</div>" + (n ? '<div class="wt">Fertig in ca. ' + eta(cartParts()) + " Min.</div>" : "") + '</div><button class="go" data-a="checkout"' + (n ? "" : " disabled") + ">Zur Kasse</button></div>";
+}
+function vBarSkip(){ return '<div class="bar"><div><div class="t">Zwischensumme</div><div class="s">' + eur(cartTotal()) + '</div></div><button class="go" data-a="skip">Nein danke, weiter</button></div>'; }
+function vBarPay(){ return '<div class="bar"><div><div class="t">Gesamt</div><div class="s">' + eur(cartTotal()) + '</div><div class="wt">Fertig in ca. ' + eta(cartParts()) + ' Min.</div></div><button class="go" data-a="topay"' + (S.cart.length ? "" : " disabled") + ">Bezahlen</button></div>"; }
+
+/* ---------------- Blätter ---------------- */
+function optBtn(a, v, on, name, small, plus, disabled, warn){
+  return '<button class="opt' + (on ? " on" : "") + '" data-a="' + a + '" data-v="' + v + '"' + (disabled ? " disabled" : "") + ">" + (plus ? '<span class="pl">' + plus + "</span>" : "") + esc(name) + (small ? "<small>" + small + "</small>" : "") + (warn ? '<div class="w">' + warn + "</div>" : "") + "</button>";
+}
+function allWarn(all){ var w = containsOf(all, S.filter); return w.length ? "enthält " + w.map(cname).join(", ") : ""; }
+var GF_NOTE = "Glutenfrei nur auf Anfrage: Das Brot kommt in denselben Toaster, Kreuzkontakt mit Gluten ist möglich. Bei Zöliakie frag bitte am Tresen.";
+function milkGroup(l){
+  return '<div class="grp"><h4>milch<span>Milchalternative +' + eur(PR.milch) + "</span></h4><div class=\"two\">" + Object.keys(MI).map(function(k){ var m = MI[k];
+    return optBtn("milk", k, l.milk === k, m.name, allText(m.all).replace(" Spuren sind möglich.", ""), m.plus ? "+" + eur(m.plus) : "", false, allWarn(m.all)); }).join("") + "</div></div>";
+}
+function gfGroup(l, label){
+  return '<div class="grp"><h4>' + (label || "brot") + "<span>Sauerteig ist Standard</span></h4><div class=\"two\">" + optBtn("gf", "0", !l.gf, "Sauerteig", "Wie auf der Karte", "") +
+    optBtn("gf", "1", l.gf, "Glutenfreies Brot", "Auf Anfrage", "+" + eur(PR.gf)) + "</div>" + (l.gf ? '<div class="note">' + GF_NOTE + "</div>" : "") + "</div>";
+}
+function protGroup(l){
+  return '<div class="grp"><h4>extra<span>Kommt mit in den Mixer</span></h4><div class="two">' + optBtn("prot", "0", !l.prot, "Ohne", "Wie auf der Karte", "") + optBtn("prot", "1", l.prot, "Protein Boost", "Erbsenprotein", "+" + eur(PR.prot)) + "</div></div>";
+}
+function sheetHead(it, l){
+  var al = lineAll(l), view = it.kombi && l.a ? null : it;
+  return '<div class="scrim" data-a="sheetx"></div><div class="sheet"><button class="x" data-a="sheetx" aria-label="Schließen">×</button><div class="body">' + pic(it, "pic") +
+    "<h2>" + esc(it.name) + tags(it) + '</h2><p class="d">' + esc(it.desc) + "</p>" + (it.zut.length ? '<p class="z">' + it.zut.map(esc).join(" · ") + (it.groesse ? " · " + esc(it.groesse) : "") + "</p>" : "") +
+    '<p class="a">' + (it.kombi && !(l.a && l.b) ? "Allergene hängen von deiner Wahl ab. Spuren sind möglich." : allText(al)) + "</p>";
+}
+function qtyFoot(l, label, ok){
+  return '</div><div class="foot2"><div class="step"><button data-a="q-"' + (l.qty > 1 ? "" : " disabled") + ">−</button><span>" + l.qty + '</span><button data-a="q+"' + (l.qty < R.max_qty ? "" : " disabled") + ">+</button></div>" +
+    '<button class="add2" data-a="addline"' + (ok ? "" : " disabled") + "><span>" + label + "</span><span>" + eur(lineUnit(l) * l.qty) + "</span></button></div></div>";
+}
+function vSheet(){
+  var l = S.sheet.line, it = I[l.id], h = sheetHead(it, l);
+  if(it.kombi) return h + vKombi(l, it);
+  if(it.o_milk) h += milkGroup(l);
+  if(it.o_gf) h += gfGroup(l);
+  if(it.o_prot) h += protGroup(l);
+  if(it.o_tops) h += '<div class="grp"><h4>extra topping<span>Doppelt drauf, je +' + eur(PR.top) + ", bis " + R.max_tops + "</span></h4><div class=\"two\">" + it.tops.map(function(t){ var on = l.tops.indexOf(t) > -1;
+    return optBtn("top", t, on, t, "Ist schon auf deiner Bowl", "+" + eur(PR.top), !on && l.tops.length >= R.max_tops); }).join("") + "</div></div>";
+  var o = lineOpts(l); if(o.length) h += '<div class="sum2"><b>Deine Wahl:</b> ' + o.map(esc).join(" · ") + "</div>";
+  return h + qtyFoot(l, "In den Warenkorb", true);
+}
+function choice(kat, cur, act, l){
+  return '<div class="two">' + byKat(kat).map(function(x){ return optBtn(act, x.id, cur === x.id, x.name, "Einzeln " + eur(x.price) + (x.vg ? " · vegan" : ""), "", isSold(x) || !dietOk(x), allWarn(x.all)); }).join("") + "</div>";
+}
+function vKombi(l, it){
+  var h = "";
+  if(it.id === "kombi-fuel"){
+    h += '<div class="grp"><h4>1 toast<span>Nach Wahl</span></h4>' + choice("Toasts", l.a, "ka", l) + "</div>";
+    if(l.a) h += gfGroup(l, "brot zum toast");
+    h += '<div class="grp"><h4>2 smoothie<span>Nach Wahl, 16 oz</span></h4>' + choice("Smoothies", l.b, "kb", l) + "</div>";
+    if(l.b) h += protGroup(l);
+  } else {
+    h += '<div class="grp"><h4>1 kaffee<span>Nach Wahl</span></h4>' + choice("Kaffee", l.a, "ka", l) + "</div>";
+    if(l.a && I[l.a].o_milk) h += milkGroup(l);
+    h += '<div class="sum2"><b>Dabei:</b> ' + esc(I[it.kombi.b].name) + " vom Tresen.</div>";
+  }
+  if(l.a && l.b){ var sum = I[l.a].price + I[l.b].price; h += '<div class="sum2"><b>Preis:</b> Kombi ' + eur(it.price) + ", einzeln " + eur(sum) + ". " + (sum < it.price ? "Einzeln ist es günstiger, du zahlst " + eur(sum) + "." : "Du sparst " + eur(sum - it.price) + ".") + "</div>"; }
+  var miss = missing(l);
+  return h + qtyFoot(l, miss || "In den Warenkorb", !miss);
+}
+function thumb(id){ var it = I[id]; return '<div class="im' + (it.cut || it.kombi ? "" : " cov") + '">' + (it.kombi ? '<img src="' + src(it.id === "kombi-fuel" ? "s05" : "g01") + '" alt="">' : '<img src="' + src(id) + '" alt="">') + "</div>"; }
+function vUpsell(){
+  var u = upsell();
+  return '<div class="page"><h2 class="h2">noch was dazu?</h2><p class="lead">Passt zu deiner Bestellung. Du kannst alles überspringen.</p>' + u.map(function(x){
+    if(x.kind === "kombi") return '<div class="uh">' + esc(x.why) + '</div><div class="urow">' + thumb("kombi-fuel") + '<div class="tx"><b>' + esc(I["kombi-fuel"].name) + "</b><span>Dein Toast und dein Smoothie zusammen für " + eur(I["kombi-fuel"].price) + ". Du sparst " + eur(x.save) + '.</span></div><button class="go" data-a="u-kombi">Ja, Kombi</button></div>';
+    return '<div class="uh">' + esc(x.why) + "</div>" + x.ids.map(function(id){ var it = I[id]; return '<div class="urow">' + thumb(id) + '<div class="tx"><b>' + esc(it.name) + tags(it) + "</b><span>" + esc(it.desc) + " " + eur(it.price) + '</span></div><button class="add" data-a="u-add" data-v="' + id + '">+</button></div>'; }).join("");
+  }).join("") + "</div>";
+}
+function vCart(){
+  var many = cartCount() >= R.staff_call_count;
+  var rows = S.cart.map(function(l){
+    var it = I[l.id], o = lineOpts(l), al = lineAll(l);
+    return '<div class="crow">' + thumb(l.id) + '<div class="tx"><b>' + esc(it.name) + tags(it) + "</b>" + (o.length ? "<span>" + esc(o.join(" · ")) + "</span>" : "") + '<span class="ac">' + (al.length ? "Allergene: " + al.join(" ") : "Keine Hauptallergene") + (l.gf ? " · Kreuzkontakt Gluten möglich" : "") + '</span><button class="rm" data-a="c-rm" data-v="' + l.uid + '">Entfernen</button></div>' +
+      '<div class="step"><button data-a="c-" data-v="' + l.uid + '">−</button><span>' + l.qty + '</span><button data-a="c+" data-v="' + l.uid + '"' + (l.qty >= R.max_qty ? " disabled" : "") + '>+</button></div><div class="pr">' + eur(lineTotal(l)) + "</div></div>";
+  }).join("");
+  return '<div class="page"><h2 class="h2">dein warenkorb</h2>' + (S.cart.length ? rows : '<p class="lead">Dein Warenkorb ist leer.</p>') +
+    (S.cart.length ? '<div class="sum"><div><span>' + cartCount() + " Artikel · " + (S.mode === "go" ? "Mitnahme" : "Im Laden") + "</span><span>" + eur(cartTotal()) + '</span></div><div><span>Alles wird frisch gemacht</span><span>ca. ' + eta(cartParts()) + ' Min.</span></div><div class="tot"><span>Gesamt</span><span>' + eur(cartTotal()) + "</span></div><div><small>inkl. MwSt., Aufteilung auf dem Beleg der Kasse</small><small></small></div></div>" : "") +
+    (many ? '<p class="hint" style="margin-top:20px">Große Bestellung: Komm bitte kurz zum Tresen, dann planen wir die Reihenfolge mit dir.</p>' : "") +
+    '<button class="skip" style="margin-top:24px" data-a="more">Noch etwas bestellen</button></div>';
+}
+function vPay(){
+  return '<div class="page"><h2 class="h2">wie zahlst du?</h2><p class="lead">Gesamt ' + eur(cartTotal()) + '. Die Bezahlung ist im Prototyp nur simuliert.</p><div class="payopts">' +
+    '<button class="bigbtn b" data-a="pm" data-v="card"><span class="mono">[ KARTE ]</span>karte<small>Girocard, Kreditkarte, Handy am Terminal</small></button>' +
+    '<button class="bigbtn" data-a="pm" data-v="cash"><span class="mono">[ TRESEN ]</span>bar am tresen<small>Du bekommst eine Nummer und zahlst an der Kasse</small></button></div></div>' +
+    '<label class="demo"><input type="checkbox" data-a="failtoggle"' + (S.payfail ? " checked" : "") + "> Demo: Kartenzahlung wird abgelehnt (Fehlerfall testen)</label>" +
+    '<div class="bar"><div><div class="t">Gesamt</div><div class="s">' + eur(cartTotal()) + '</div></div><button class="go g" data-a="back-cart">Zurück</button></div>';
+}
+function vPaying(){ return '<div class="center"><div class="ring"></div><h2>karte oder handy halten</h2><p>' + eur(cartTotal()) + " am Terminal bezahlen. Das dauert nur einen Moment.</p></div>"; }
+function vFail(){ return '<div class="center"><h2>zahlung nicht möglich</h2><p>Die Karte wurde abgelehnt. Deine Bestellung bleibt im Warenkorb. Versuch es noch einmal oder zahl bar am Tresen.</p><div class="row2" style="width:900px"><button data-a="pm" data-v="card">Nochmal versuchen</button><button class="g" data-a="pm" data-v="cash">Bar am Tresen</button></div><button class="skip" data-a="back-cart">Zurück zum Warenkorb</button></div>'; }
+function vDone(){
+  var o = S.last, cash = o.pay.method === "cash";
+  var lines = o.lines.map(function(l){ return "<div><span>" + l.qty + "× " + esc(l.name) + "</span><span>" + eur(l.total) + "</span></div>" + (l.opts.length ? '<div style="opacity:.7"><span>  ' + esc(l.opts.join(", ")) + "</span></div>" : ""); }).join("");
+  return '<div class="done">' + logo() + '<div class="k">[ DEINE NUMMER ]</div><div class="n">' + o.number + "</div><h2>" + (cash ? "bitte jetzt am tresen zahlen" : "bezahlt, danke.") + "</h2>" +
+    "<p>" + (cash ? "Zeig deine Nummer am Tresen. Sobald du bezahlt hast, mixen und toasten wir los." : "Wir machen alles frisch. Deine Nummer leuchtet auf dem Abholmonitor, dein Becher steht dann am Pickup Würfel.") + "</p>" +
+    '<div class="eta"><b>ca. ' + o.eta + ' min</b><span>Wartezeit, weil alles<br>frisch gemacht wird</span></div>' +
+    '<div class="bon"><b>Beleg Vorschau (Platzhalter)</b><hr>' + lines + "<hr><div><span>Gesamt inkl. MwSt.</span><b>" + eur(o.total) + "</b></div><div><span>Zahlart</span><span>" + (cash ? "Bar am Tresen" : "Karte (simuliert)") + "</span></div><div><span>" + (o.mode === "go" ? "Mitnahme" : "Im Laden") + "</span><span>Nr. " + o.number + "</span></div><hr><span>Betreiber, Adresse, USt IdNr., MwSt. Aufteilung und TSE Daten kommen von der Kasse.</span></div>" +
+    '<button class="cta" data-a="newo">Neue Bestellung</button></div>' +
+    '<div class="foot">' + esc(M.foot) + " Es wurde nichts bezahlt, der Prototyp simuliert.</div>";
+}
+function vDlg(){
+  var d = S.dlg;
+  if(d === "filter") return '<div class="scrim d" data-a="dlgx"></div><div class="dlg"><h3>ich vermeide</h3><p>Wir blenden aus oder markieren, was nicht passt. Bestellen bleibt möglich, die Entscheidung liegt bei dir. Vegan steht nur, wo die Karte es sagt.</p><h5>Ernährung</h5><div class="acb"><button class="' + (S.diet === "v" ? "on" : "") + '" data-a="diet" data-v="v">Nur vegetarisch</button><button class="' + (S.diet === "vg" ? "on" : "") + '" data-a="diet" data-v="vg">Nur vegan</button></div><h5>Allergene</h5><div class="acb">' +
+    Object.keys(M.codes).map(function(c){ return '<button class="' + (S.filter.indexOf(c) > -1 ? "on" : "") + '" data-a="ftog" data-v="' + c + '">' + M.codes[c] + "</button>"; }).join("") + '</div><p style="font-size:20px;margin-top:22px">Glutenfreies Brot gibt es auf Anfrage, Kreuzkontakt im Toaster ist möglich.</p><div class="row2"><button class="g" data-a="fclear">Alle zurücksetzen</button><button data-a="dlgx">Fertig</button></div></div>';
+  if(d === "cancel") return '<div class="scrim d" data-a="dlgx"></div><div class="dlg"><h3>bestellung abbrechen?</h3><p>Dein Warenkorb wird geleert und wir gehen zurück zum Start.</p><div class="row2"><button class="g" data-a="dlgx">Weiter bestellen</button><button data-a="reset">Abbrechen</button></div></div>';
+  if(d === "idle") return '<div class="scrim d"></div><div class="dlg"><h3>bist du noch da?</h3><p>Ohne Eingabe gehen wir gleich zurück zum Start.</p><div class="cdn">' + S.countdown + '</div><div class="row2"><button data-a="dlgx">Ja, weiter</button></div></div>';
+  return "";
+}
+
+/* ---------------- Aktionen ---------------- */
+function reset(){ S.screen = "attract"; S.mode = null; S.cart = []; S.sheet = null; S.dlg = null; S.cat = "Smoothies"; S.upDone = false; S.last = null; S.toast = null; clearTimeout(doneTimer); render(); }
+function complete(method){ S.last = placeOrder(method); S.screen = "done"; S.cart = []; S.sheet = null; render(); clearTimeout(doneTimer); doneTimer = setTimeout(function(){ if(S.screen === "done") reset(); }, 20000); }
+function needsSheet(it){ return !!(it.kombi || it.o_prot || it.o_tops || it.o_gf || it.o_milk); }
+function toggle(arr, v){ var i = arr.indexOf(v); if(i > -1) arr.splice(i, 1); else arr.push(v); }
+function mergeKombi(){
+  var t = S.cart.filter(function(l){ return I[l.id].kat === "Toasts"; })[0], s = S.cart.filter(function(l){ return I[l.id].kat === "Smoothies"; })[0]; if(!t || !s) return;
+  var k = newLine(I["kombi-fuel"]); k.a = t.id; k.b = s.id; k.gf = t.gf; k.prot = s.prot;
+  [t, s].forEach(function(x){ x.qty--; }); S.cart = S.cart.filter(function(x){ return x.qty > 0; }); addLine(k);
+}
+function act(a, v){
+  lastTouch = Date.now();
+  var l = S.sheet && S.sheet.line;
+  switch(a){
+    case "start": S.screen = "mode"; break;
+    case "mode": S.mode = v; S.screen = "menu"; break;
+    case "cat": S.cat = v; break;
+    case "card": var it = I[v]; if(isSold(it)) return;
+      if(needsSheet(it)){ S.sheet = {line: newLine(it)}; S.fresh = true; } else { addLine(newLine(it)); toast(it.name + " liegt im Warenkorb"); return; } break;
+    case "sheetx": S.sheet = null; break;
+    case "milk": l.milk = v; break;
+    case "gf": l.gf = v === "1"; break;
+    case "prot": l.prot = v === "1"; break;
+    case "top": toggle(l.tops, v); break;
+    case "ka": l.a = v; if(!I[v].o_milk) l.milk = "kuh"; break;
+    case "kb": l.b = v; break;
+    case "q+": l.qty = Math.min(R.max_qty, l.qty + 1); break;
+    case "q-": l.qty = Math.max(1, l.qty - 1); break;
+    case "addline": if(missing(l)) return; var nm = I[l.id].name; addLine(l); S.sheet = null; toast(nm + " liegt im Warenkorb"); return;
+    case "checkout": if(!S.cart.length) return; S.screen = (!S.upDone && upsell().length) ? "upsell" : "cart"; break;
+    case "u-add": addLine(newLine(I[v])); toast(I[v].name + " liegt im Warenkorb"); if(!upsell().length) S.screen = "cart"; return;
+    case "u-kombi": mergeKombi(); toast("Fuel Kombi liegt im Warenkorb"); if(!upsell().length) S.screen = "cart"; return;
+    case "skip": S.upDone = true; S.screen = "cart"; break;
+    case "more": S.screen = "menu"; break;
+    case "c+": S.cart.forEach(function(x){ if(x.uid == v) x.qty = Math.min(R.max_qty, x.qty + 1); }); break;
+    case "c-": S.cart.forEach(function(x){ if(x.uid == v) x.qty = Math.max(1, x.qty - 1); }); break;
+    case "c-rm": S.cart = S.cart.filter(function(x){ return x.uid != v; }); if(!S.cart.length) S.screen = "menu"; break;
+    case "topay": S.screen = "pay"; break;
+    case "back-cart": S.screen = "cart"; break;
+    case "failtoggle": S.payfail = !S.payfail; break;
+    case "pm":
+      if(v === "cash"){ complete("cash"); return; }
+      S.screen = "paying"; render(); setTimeout(function(){ if(S.screen !== "paying") return; if(S.payfail){ S.screen = "payfail"; render(); } else complete("card"); }, 2600); return;
+    case "newo": reset(); return;
+    case "filter": S.dlg = "filter"; break;
+    case "ftog": toggle(S.filter, v); break;
+    case "diet": S.diet = S.diet === v ? null : v; break;
+    case "fclear": S.filter = []; S.diet = null; break;
+    case "access": S.access = !S.access; break;
+    case "cancel": S.dlg = "cancel"; break;
+    case "dlgx": S.dlg = null; break;
+    case "reset": reset(); return;
+  }
+  render();
+}
+app.addEventListener("click", function(e){
+  if(VIEW !== "kiosk") return;
+  var t = e.target.closest("[data-a]"); if(!t || t.disabled) return;
+  if(t.tagName === "LABEL") return; if(t.classList.contains("scrim") && S.dlg === "idle") return;
+  e.stopPropagation(); act(t.getAttribute("data-a"), t.getAttribute("data-v"));
+});
+["pointerdown", "keydown"].forEach(function(ev){ addEventListener(ev, function(){ lastTouch = Date.now(); }); });
+if(VIEW === "kiosk") setInterval(function(){
+  if(S.screen === "attract" || S.screen === "done" || S.screen === "paying") return;
+  var idle = (Date.now() - lastTouch) / 1000;
+  if(idle >= R.idle_s && S.dlg !== "idle"){ S.dlg = "idle"; S.countdown = R.idle_cd; render(); }
+  else if(S.dlg === "idle"){ S.countdown = Math.max(0, R.idle_s + R.idle_cd - Math.floor(idle)); if(S.countdown <= 0) reset(); else render(); }
+}, 1000);
+
+/* ---------------- Küchenmonitor: Bon je Station ---------------- */
+var K_OPEN = false, SNAME = {smoothie: ["smoothie", "Smoothies und Bowls"], toast: ["toast", "Toasts und Pfanne"], kaffee: ["kaffee", "Kaffee, Shots, Gebäck"]};
+function mins(o){ return Math.max(0, Math.floor((Date.now() - new Date(o.started || o.created).getTime()) / 60000)); }
+function ticket(o, s){
+  var ps = o.parts.filter(function(p){ return p.st === s; }), late = mins(o) >= R.late_min;
+  var lines = ps.map(function(p){ return '<div class="l"><b>' + (p.farbe ? '<i style="background:' + p.farbe + '"></i>' : "") + p.qty + "× " + esc(p.name) + "</b>" + (p.tresen ? "<em>vom Tresen</em>" : "") + (p.opts.length ? "<em>" + p.opts.map(esc).join(" · ") + "</em>" : "") + (p.all.length ? "<small>Allergene: " + p.all.join(" ") + "</small>" : "") + "</div>"; }).join("");
+  return '<div class="tk' + (late ? " late" : "") + '"><div class="h"><b>' + o.number + "</b><span>" + mins(o) + " min</span></div><div class=\"m\">" + (o.mode === "go" ? "Mitnahme" : "Im Laden") + " · Ziel ca. " + Math.ceil(o.mins[s] || 0.5) + " min</div>" + lines +
+    '<button data-k="st" data-s="' + s + '" data-id="' + o.id + '">Fertig</button></div>';
+}
+function sideTk(o, btn){ return '<div class="tk"><div class="h"><b>' + o.number + "</b><span>" + eur(o.total) + '</span></div><div class="m">' + (o.pay.method === "cash" ? "Bar, Zahlung offen" : (o.mode === "go" ? "Mitnahme" : "Im Laden")) + "</div>" + '<button data-k="' + btn[0] + '" data-id="' + o.id + '">' + btn[1] + "</button></div>"; }
+function renderKds(){
+  var all = db(), open = all.filter(function(o){ return o.status === "open"; }), sold = soldList(), q = queue();
+  var cols = Object.keys(SNAME).map(function(s){ var os = open.filter(function(o){ return o.st[s] === "open"; });
+    return '<div class="k-col"><h2><span>' + SNAME[s][0] + "</span><span>" + os.length + '</span></h2><div class="sub">' + SNAME[s][1] + " · Stau ca. " + Math.ceil(q[s]) + ' min</div><div class="list">' + os.map(function(o){ return ticket(o, s); }).join("") + "</div></div>"; }).join("");
+  var pay = all.filter(function(o){ return o.status === "awaiting_payment"; }), rdy = all.filter(function(o){ return o.status === "ready"; });
+  var side = '<div class="k-side"><div class="k-col"><h2><span>zahlung offen</span><span>' + pay.length + '</span></h2><div class="list">' + pay.map(function(o){ return sideTk(o, ["paid", "Bezahlt"]); }).join("") + '</div></div><div class="k-col"><h2><span>bereit</span><span>' + rdy.length + '</span></h2><div class="sub">Am Pickup Würfel</div><div class="list">' + rdy.map(function(o){ return sideTk(o, ["pick", "Abgeholt"]); }).join("") + "</div></div></div>";
+  var drawer = K_OPEN ? '<div class="k-draw"><h3>ausverkauft schalten</h3>' + M.items.filter(function(i){ return !i.kombi; }).map(function(i){ var s = sold.indexOf(i.id) > -1; return '<div class="it"><span>' + esc(i.nr + " " + i.name) + '</span><button class="' + (s ? "on" : "") + '" data-sold="' + i.id + '">' + (s ? "Ausverkauft" : "Verfügbar") + "</button></div>"; }).join("") + "</div>" : "";
+  app.innerHTML = '<div class="k-wrap"><div class="k-top">' + logo() + '<h1>küche</h1><span class="q">Bon je Station · alles frisch</span><button class="k-btn" data-demo="1">Beispielbestellung</button><button class="k-btn' + (K_OPEN ? " on" : "") + '" data-drawer="1">Ausverkauft (' + sold.length + ")</button></div><div class=\"k-cols\">" + cols + side + "</div>" + drawer + "</div>";
+}
+/* ---------------- Abholmonitor ---------------- */
+function renderReady(){
+  var all = db(), f = all.filter(function(o){ return o.status === "ready"; }), p = all.filter(function(o){ return o.status === "open"; });
+  var rest = function(o){ var r = o.eta - (Date.now() - new Date(o.started || o.created).getTime()) / 60000; return r <= 0.5 ? "gleich" : "ca. " + Math.ceil(r) + " min"; };
+  app.innerHTML = '<div class="r-wrap"><section class="r-a"><div class="k">[ BEREIT ]</div><h1>abholen</h1><div class="nums">' + (f.length ? f.map(function(o){ return "<span>" + o.number + "</span>"; }).join("") : '<div class="empty">Gerade ist nichts fertig. Wir mixen und toasten alles frisch.</div>') + "</div></section>" +
+    '<section class="r-b"><div class="glow"></div><div class="cube"><div class="f1"><svg viewBox="' + M.vb.mark + '"><use href="#mark"/></svg></div><div class="f2"></div><div class="f3"></div></div><div class="t">pickup würfel</div><div class="s">Wenn deine Nummer links steht, wartet dein Becher hier.</div>' + logo() + "</section>" +
+    '<section class="r-c"><div class="k">[ IN ARBEIT ]</div><h1>frisch</h1><div class="nums">' + (p.length ? p.map(function(o){ return "<div><b>" + o.number + "</b><span>" + rest(o) + "</span></div>"; }).join("") : '<div class="empty">Keine offenen Bestellungen.</div>') + "</div></section>" +
+    '<div class="r-foot">' + esc(M.foot) + "</div></div>";
+}
+if(VIEW !== "kiosk"){
+  app.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.k === "st") stationDone(b.dataset.id, b.dataset.s);
+    else if(b.dataset.k === "paid") paid(b.dataset.id);
+    else if(b.dataset.k === "pick") pickedUp(b.dataset.id);
+    else if(b.dataset.drawer) K_OPEN = !K_OPEN;
+    else if(b.dataset.demo) demoOrder();
+    else if(b.dataset.sold){ var s = soldList(), i = s.indexOf(b.dataset.sold); if(i > -1) s.splice(i, 1); else s.push(b.dataset.sold); setSold(s); }
+    render();
+  });
+  if(bc) bc.onmessage = function(){ render(); };
+  addEventListener("storage", render); setInterval(render, VIEW === "kds" ? 5000 : 10000);
+} else if(bc) bc.onmessage = function(m){ if(m.data === "sold" || S.screen === "attract") render(); };
+render();
+})();
+
+</script>
+</body>
+</html>
